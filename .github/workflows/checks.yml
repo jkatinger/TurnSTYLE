@@ -1,0 +1,23 @@
+name: macOS checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Lint Swift
+        run: xcrun swift-format lint --strict --recursive Sources Tests Package.swift scripts/make-icon.swift
+      - name: Run core checks
+        run: swift run --build-system native TurnStyleChecks
+      - name: Build signed local bundle
+        run: zsh scripts/build.sh
+      - name: Check subprocess helpers
+        run: |
+          python3 scripts/check-helper.py
+          python3 scripts/check-codex-helper.py
+          python3 scripts/check-remote-bridge.py
