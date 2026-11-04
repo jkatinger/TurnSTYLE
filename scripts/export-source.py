@@ -9,7 +9,7 @@ def export(destination):
     source = Path(__file__).resolve().parents[1]
     files = [source / name for name in (
         'Package.swift', 'README.md', 'LICENSE', 'SECURITY.md', 'CONTRIBUTING.md',
-        'RELEASE_NOTES.md',
+        'RELEASE_NOTES.md', 'docs/images/turnstyle-light-dark.png',
         '.gitignore', '.swift-format',
     )]
     for folder, pattern in (
