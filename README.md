@@ -7,6 +7,10 @@ window beside your coding apps, see what is working or waiting, and open the exa
 chat from its title. Native SwiftUI/AppKit, macOS 14+, with no third-party runtime
 dependencies or model API calls.
 
+![TurnSTYLE showing light and dark modes with sample Claude Code and Codex chats](docs/images/turnstyle-light-dark.png)
+
+*Actual app views with sample conversations. Light and dark modes shown together.*
+
 ## Features
 
 - Active view with separate Working and Up Next tables; Snoozed, Done and Archive.
