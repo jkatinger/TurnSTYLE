@@ -1,0 +1,15 @@
+.build/
+.swiftpm/
+dist/
+work/
+outputs/
+HANDOFF.md
+.DS_Store
+__pycache__/
+*.py[cod]
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.mobileprovision
