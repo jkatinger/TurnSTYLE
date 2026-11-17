@@ -3,6 +3,7 @@ import SwiftUI
 import TurnStyleCore
 import UniformTypeIdentifiers
 
+private let rowControlWidth: CGFloat = 32
 private let ink = AppPalette.text
 private let sidebarBlack = Color(white: 0.025)
 private let paper = AppPalette.chrome
@@ -322,17 +323,19 @@ struct QueueView: View {
     private func tableCard(_ title: String, sessions: [TrackedSession], availableWidth: CGFloat, empty: String)
         -> some View
     {
-        let overflow = columns.total > availableWidth
+        let tableWidth = columns.total + rowControlWidth
+        let columnWidth = availableWidth - rowControlWidth
+        let overflow = tableWidth > availableWidth
         let bodyHeight = CGFloat(sessions.isEmpty ? 38 : sessions.count * 32)
         return VStack(spacing: 0) {
             tableHeading(title, count: sessions.count)
             ScrollView(.horizontal) {
                 VStack(spacing: 0) {
-                    SessionTableHeader(model: model, columns: columns, availableWidth: availableWidth)
+                    SessionTableHeader(model: model, columns: columns, availableWidth: columnWidth)
                     LazyVStack(spacing: 0) {
-                        tableRows(sessions, availableWidth: availableWidth, empty: empty)
+                        tableRows(sessions, availableWidth: columnWidth, empty: empty)
                     }
-                }.frame(width: max(columns.total, availableWidth))
+                }.frame(width: max(tableWidth, availableWidth))
                     .padding(.bottom, overflow ? 12 : 0)
             }.frame(width: availableWidth, height: 28 + bodyHeight + (overflow ? 12 : 0))
         }
@@ -604,6 +607,7 @@ private struct SessionTableHeader: View {
     let availableWidth: CGFloat
     var body: some View {
         HStack(spacing: 0) {
+            Color.clear.frame(width: rowControlWidth).accessibilityHidden(true)
             ForEach(columns.order, id: \.self) { column in
                 SessionHeaderCell(model: model, columns: columns, column: column, availableWidth: availableWidth)
             }
@@ -777,11 +781,17 @@ private struct SessionRow: View {
     }
     private var snoozed: Bool { session.isSnoozed(at: model.now) }
     private var statusLabel: String {
-        session.archived == true ? "Archived" : session.done ? "Done" : snoozed ? "Snoozed" : session.status.label
+        session.archived == true
+            ? "Archived"
+            : session.done
+                ? "Done" : snoozed ? "Snoozed" : session.addressed == true ? "Addressed" : session.status.label
     }
     private var statusSymbol: String {
         session.archived == true
-            ? "archivebox" : session.done ? "checkmark.circle" : snoozed ? "moon" : session.status.symbol
+            ? "archivebox"
+            : session.done
+                ? "checkmark.circle"
+                : snoozed ? "moon" : session.addressed == true ? "checkmark.circle" : session.status.symbol
     }
     private var summary: String {
         if session.done { return "Marked done in TurnSTYLE. The conversation remains in \(session.appName)." }
@@ -796,8 +806,43 @@ private struct SessionRow: View {
         }
         return session.status.explanation.replacingOccurrences(of: "Claude", with: session.appName)
     }
+    private var needsAttention: Bool {
+        session.archived != true && session.addressed != true && session.isReady(at: model.now)
+            && session.status != .unknown
+    }
+
+    private var leadingControls: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "triangle.fill")
+                .font(.system(size: 7, weight: .bold))
+                .rotationEffect(.degrees(90))
+                .foregroundStyle(needsAttention ? AppPalette.ready : Color.clear)
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(!needsAttention)
+                .accessibilityLabel("Needs attention")
+            if session.archived != true {
+                Button {
+                    model.archive(session.id)
+                } label: {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 9))
+                        .frame(width: 16, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(sourceInk)
+                .modifier(ActionHover(tooltip: "Archive"))
+                .accessibilityLabel("Archive \(session.title)")
+            } else {
+                Color.clear.frame(width: 16, height: 22)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
+            leadingControls.padding(.leading, 6).frame(width: rowControlWidth)
             ForEach(columns.order, id: \.self) { column in
                 cell(column)
             }
@@ -814,6 +859,15 @@ private struct SessionRow: View {
         }
         .zIndex(interaction.hovered ? 1 : 0)
         .overlay(alignment: .bottom) { Rectangle().fill(AppPalette.grid).frame(height: 0.5) }
+        .contextMenu {
+            if needsAttention
+                || (session.addressed == true && session.archived != true && session.isReady(at: model.now))
+            {
+                Button(session.addressed == true ? "Mark as unaddressed" : "Mark as addressed") {
+                    model.markAddressed(session.id, addressed: session.addressed != true)
+                }
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             "\(session.providerName), \(session.hostID == nil ? "local" : "remote") conversation, \(session.title)")
@@ -850,8 +904,8 @@ private struct SessionRow: View {
                 .foregroundStyle(sourceInk).help(session.originName)
             case .status:
                 Label(statusLabel, systemImage: statusSymbol)
-                    .foregroundStyle(session.done || snoozed ? muted : session.status.tint)
-                    .help(summary)
+                    .foregroundStyle(session.done || snoozed || session.addressed == true ? muted : session.status.tint)
+                    .help(session.addressed == true && statusLabel == "Addressed" ? "Reviewed in TurnSTYLE." : summary)
             case .project:
                 Text(session.projectName).foregroundStyle(muted).help(session.workspace)
             case .updated:

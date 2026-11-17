@@ -76,7 +76,11 @@ enum QueueFilter: String, CaseIterable {
             case .session: return session.title
             case .source: return session.providerName
             case .location: return session.hostID == nil ? "Local" : "Remote"
-            case .status: return session.done ? "Done" : session.isSnoozed(at: now) ? "Snoozed" : session.status.label
+            case .status:
+                return session.done
+                    ? "Done"
+                    : session.isSnoozed(at: now)
+                        ? "Snoozed" : session.addressed == true ? "Addressed" : session.status.label
             case .project: return session.projectName
             default: return ""
             }
@@ -153,7 +157,7 @@ enum QueueFilter: String, CaseIterable {
     var codexInstaller: HookInstaller { HookInstaller(claudeRoot: codexRoot, helper: helper, codex: true) }
     var helper: URL { Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/turnstyle-hook") }
     var installer: HookInstaller { HookInstaller(claudeRoot: root, helper: helper) }
-    var allReady: [TrackedSession] { state.ready(at: now) }
+    var allReady: [TrackedSession] { state.ready(at: now).filter { $0.addressed != true } }
     var ready: [TrackedSession] { allReady.filter { sourceFilter.includes($0) } }
     var filteredSessions: [TrackedSession] { state.queueSessions.filter { sourceFilter.includes($0) } }
     func setSourceFilter(_ value: SourceFilter) {
@@ -164,7 +168,7 @@ enum QueueFilter: String, CaseIterable {
     var working: [TrackedSession] {
         sorted(state.activeSessions(at: now).filter { sourceFilter.includes($0) && $0.status == .running })
     }
-    var upNext: [TrackedSession] { sorted(ready) }
+    var upNext: [TrackedSession] { sorted(state.ready(at: now).filter { sourceFilter.includes($0) }) }
     var selected: TrackedSession? { visible.first { $0.id == selection } }
     var visible: [TrackedSession] {
         if searching { return sorted(state.searchSessions(searchQuery, at: now).filter { sourceFilter.includes($0) }) }
@@ -441,6 +445,12 @@ enum QueueFilter: String, CaseIterable {
         update(&state.sessions[i])
         save()
         if !visible.contains(where: { $0.id == selection }) { selection = visible.first?.id }
+    }
+    func markAddressed(_ id: String, addressed: Bool) {
+        change(id) { $0.addressed = addressed ? true : nil }
+    }
+    func archive(_ id: String) {
+        change(id) { $0.archived = true }
     }
     func markDone(_ id: String) {
         change(id) {

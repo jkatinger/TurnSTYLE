@@ -78,6 +78,7 @@ public struct TrackedSession: Codable, Identifiable, Sendable {
     public var attentionSince: Date?
     public var lastEventAt: Date?
     public var pendingRequests: [String: SessionStatus]
+    public var addressed: Bool?
     public var done: Bool
     public var snoozedUntil: Date?
     public var snoozedIndefinitely: Bool?
@@ -183,6 +184,9 @@ public struct QueueState: Codable, Sendable {
         {
             session.title = title
         }
+        if event.kind != .sessionStarted && event.kind != .sessionEnded {
+            session.addressed = nil
+        }
         switch event.kind {
         case .sessionStarted:
             // Opening/resuming a session is not proof that a model turn is running.
@@ -270,7 +274,10 @@ public struct QueueState: Codable, Sendable {
             let status =
                 session.archived == true
                 ? "archived archive"
-                : session.done ? "done" : session.isSnoozed(at: now) ? "snoozed" : session.status.label
+                : session.done
+                    ? "done"
+                    : session.isSnoozed(at: now)
+                        ? "snoozed" : session.addressed == true ? "addressed" : session.status.label
             let text = [
                 session.title, session.workspace, session.providerName, session.originName,
                 session.hostID == nil ? "local" : "remote", status, session.sessionID,
