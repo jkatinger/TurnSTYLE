@@ -19,6 +19,10 @@ dependencies or model API calls.
   headers. Table frames fit the window while headers/cells scroll horizontally.
 - Light, neutral black/gray Dark, or System appearance. Claude and Codex have
   distinct title colors; a globe identifies remote chats.
+- A green triangle marks chats that need your attention. Right-click a row and
+  choose **Mark as addressed** to clear the indicator and keep the chat in Active.
+- Archive from the left edge of a row, or choose **Archive until restored** in
+  Actions to keep recurring chats out of Active.
 - Snooze for 30 minutes, two hours, tomorrow at 9 AM, or indefinitely.
 - Menu bar count, Dock badge, and optional macOS reminders.
 - Optional Always on top setting, remembered across launches.
@@ -26,7 +30,13 @@ dependencies or model API calls.
 
 On the first import, the five most recently updated eligible chats stay visible;
 older ones go to TurnSTYLE's recoverable Archive. This happens once. There is no
-ongoing chat-count limit. A new local prompt restores an archived/done/snoozed chat.
+ongoing chat-count limit. A new local prompt brings an ordinarily archived, done,
+or snoozed chat back to Active.
+
+**Archive until restored** also catches new chats with the same exact title,
+provider, device, and workspace. This is useful for automations that create a
+fresh chat on each run. In Archive, **Bring back to queue** restores the selected
+chat and lets future matching runs appear in Active again.
 Background Claude SDK jobs, command-only sessions and subagents are excluded.
 TurnSTYLE's queue choices do not archive or modify chats in the provider apps.
 
