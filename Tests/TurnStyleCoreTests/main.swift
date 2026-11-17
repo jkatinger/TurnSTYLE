@@ -43,6 +43,7 @@ func assertThrowsError<T>(
 }
 
 let checks: [(String, (TurnStyleCoreTests) throws -> Void)] = [
+    ("Manual archive survives activity and refresh", { try $0.testArchiveUntilRestoredSurvivesActivity() }),
     (
         "Damaged inbox files are isolated; symlinks ignored",
         { try $0.testInboxQuarantinesInvalidFilesAndDoesNotFollowLinks() }

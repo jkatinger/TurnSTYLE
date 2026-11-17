@@ -196,6 +196,7 @@ enum QueueFilter: String, CaseIterable {
         }
     }
     func save() {
+        state.enforceTitleArchives()
         guard !demo, !unreadableState else {
             onChange?()
             return
@@ -206,12 +207,14 @@ enum QueueFilter: String, CaseIterable {
     func tick() {
         now = Date()
         guard !demo, !unreadableState else { return }
+        if state.enforceTitleArchives() { save() }
         do {
             let pending = try inbox.pending()
             if !pending.isEmpty {
                 var next = state
                 for (_, event) in pending { next.apply(event) }
                 // Persist before acknowledging. On a crash, replay is idempotent.
+                next.enforceTitleArchives()
                 try disk.save(next)
                 state = next
                 try inbox.acknowledge(pending.map(\.0))
@@ -318,6 +321,7 @@ enum QueueFilter: String, CaseIterable {
                 }
                 var next = state
                 next.applyRemote(snapshot)
+                next.enforceTitleArchives()
                 try disk.save(next)
                 state = next
                 remoteHistory = snapshot.historySessions()
@@ -452,6 +456,11 @@ enum QueueFilter: String, CaseIterable {
     func archive(_ id: String) {
         change(id) { $0.archived = true }
     }
+    func archiveUntilRestored(_ id: String) {
+        guard let session = state.sessions.first(where: { $0.id == id }) else { return }
+        state.archiveMatchingTitles(for: session)
+        save()
+    }
     func markDone(_ id: String) {
         change(id) {
             $0.done = true
@@ -460,11 +469,15 @@ enum QueueFilter: String, CaseIterable {
         }
     }
     func restore(_ id: String) {
+        if let session = state.sessions.first(where: { $0.id == id }), session.archiveUntilRestored == true {
+            state.stopArchivingMatchingTitles(for: session)
+        }
         change(id) {
             $0.done = false
             $0.snoozedUntil = nil
             $0.snoozedIndefinitely = false
             $0.archived = false
+            $0.archiveUntilRestored = nil
         }
     }
     func snooze(_ id: String, until date: Date) {

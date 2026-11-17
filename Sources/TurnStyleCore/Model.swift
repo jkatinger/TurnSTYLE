@@ -84,6 +84,7 @@ public struct TrackedSession: Codable, Identifiable, Sendable {
     public var snoozedIndefinitely: Bool?
     public var commandOnly: Bool?
     public var archived: Bool?
+    public var archiveUntilRestored: Bool?
     public var backgroundRun: Bool?
     public var imported: Bool
     public init(
@@ -116,8 +117,23 @@ public struct TrackedSession: Codable, Identifiable, Sendable {
     }
 }
 
+private struct ArchivedChatTitle: Codable, Hashable, Sendable {
+    let title: String
+    let provider: String
+    let hostID: String?
+    let workspace: String
+
+    init(_ session: TrackedSession) {
+        title = session.title
+        provider = session.provider
+        hostID = session.hostID
+        workspace = session.workspace
+    }
+}
+
 public struct QueueState: Codable, Sendable {
     public var version = 1
+    private var archivedChatTitles: Set<ArchivedChatTitle>?
     public var initialArchiveCompleted: Bool?
     public var codexQueueLimit: Int?
     public var sessions: [TrackedSession] = []
@@ -198,7 +214,7 @@ public struct QueueState: Codable, Sendable {
             session.done = false
             session.snoozedUntil = nil
             session.snoozedIndefinitely = false
-            session.archived = false
+            if session.archiveUntilRestored != true { session.archived = false }
             session.commandOnly = false
         case .activity:
             if session.pendingRequests.isEmpty { session.status = .running }
@@ -238,6 +254,39 @@ public struct QueueState: Codable, Sendable {
         return true
     }
 
+    /// Upgrade existing permanent archives and apply them to matching runs.
+    @discardableResult public mutating func enforceTitleArchives() -> Bool {
+        let migrating = archivedChatTitles == nil
+        if migrating {
+            archivedChatTitles = Set(sessions.filter { $0.archiveUntilRestored == true }.map(ArchivedChatTitle.init))
+        }
+        guard let rules = archivedChatTitles, !rules.isEmpty else { return migrating }
+        var changed = migrating
+        for index in sessions.indices where rules.contains(ArchivedChatTitle(sessions[index])) {
+            if sessions[index].archived != true || sessions[index].archiveUntilRestored != true {
+                sessions[index].archived = true
+                sessions[index].archiveUntilRestored = true
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    public mutating func archiveMatchingTitles(for session: TrackedSession) {
+        enforceTitleArchives()
+        archivedChatTitles?.insert(ArchivedChatTitle(session))
+        enforceTitleArchives()
+    }
+
+    public mutating func stopArchivingMatchingTitles(for session: TrackedSession) {
+        enforceTitleArchives()
+        let rule = ArchivedChatTitle(session)
+        guard archivedChatTitles?.remove(rule) != nil else { return }
+        for index in sessions.indices where ArchivedChatTitle(sessions[index]) == rule {
+            sessions[index].archiveUntilRestored = nil
+        }
+    }
+
     public var queueSessions: [TrackedSession] {
         sessions.filter { $0.backgroundRun != true && $0.commandOnly != true && $0.archived != true }
     }
@@ -256,7 +305,7 @@ public struct QueueState: Codable, Sendable {
         }
         let retained = Set(latest.prefix(max(0, keep)).map(\.id))
         for i in sessions.indices where sessions[i].backgroundRun != true {
-            sessions[i].archived = !retained.contains(sessions[i].id)
+            sessions[i].archived = sessions[i].archiveUntilRestored == true || !retained.contains(sessions[i].id)
         }
         codexQueueLimit = nil
         initialArchiveCompleted = true

@@ -154,6 +154,50 @@ final class TurnStyleCoreTests {
         assertEqual(remote.queueSessions.count, 1)
     }
 
+    func testArchiveUntilRestoredSurvivesActivity() throws {
+        var state = QueueState()
+        state.apply(event(.responseFinished, session: "automation"))
+        state.sessions[0].archived = true
+        state.sessions[0].archiveUntilRestored = true
+        state = try JSONDecoder().decode(QueueState.self, from: JSONEncoder().encode(state))
+
+        state.apply(event(.promptSubmitted, offset: 60, session: "automation"))
+        state.apply(event(.responseFinished, offset: 120, session: "automation"))
+        assertTrue(state.queueSessions.isEmpty)
+        assertEqual(state.sessions.first?.status, .ready)
+
+        var remote = TrackedSession(
+            provider: "codex", sessionID: "remote", title: "Automation", updatedAt: start,
+            imported: true, hostID: "remote-control:test")
+        remote.archived = true
+        remote.archiveUntilRestored = true
+        state.sessions.append(remote)
+        remote.title = "Renamed automation"
+        remote.updatedAt = start.addingTimeInterval(180)
+        state.mergeConnectedCatalog([remote])
+        assertTrue(state.queueSessions.isEmpty)
+        assertEqual(state.sessions.last?.title, remote.title)
+        state.completeInitialArchive([])
+        assertTrue(state.queueSessions.isEmpty)
+
+        assertTrue(state.enforceTitleArchives())
+        let nextRun = TrackedSession(
+            provider: "codex", sessionID: "next-run", title: remote.title, updatedAt: remote.updatedAt,
+            imported: true, hostID: remote.hostID)
+        var otherWorkspace = nextRun
+        otherWorkspace.sessionID = "other-workspace"
+        otherWorkspace.workspace = "/another"
+        state.mergeConnectedCatalog([nextRun, otherWorkspace])
+        state.enforceTitleArchives()
+        assertEqual(state.queueSessions.map(\.sessionID), ["other-workspace"])
+        state.stopArchivingMatchingTitles(for: nextRun)
+        var laterRun = nextRun
+        laterRun.sessionID = "later-run"
+        state.mergeConnectedCatalog([laterRun])
+        state.enforceTitleArchives()
+        assertEqual(Set(state.queueSessions.map(\.sessionID)), ["other-workspace", "later-run"])
+    }
+
     func testBackgroundClaudeRunsExcluded() throws {
         let root = try temporary()
         let projects = root.appendingPathComponent("projects/test")

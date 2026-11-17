@@ -81,7 +81,7 @@ extension QueueState {
                 }
                 if sessions[index].imported && candidate.updatedAt > sessions[index].updatedAt {
                     sessions[index].updatedAt = candidate.updatedAt
-                    sessions[index].archived = false
+                    if sessions[index].archiveUntilRestored != true { sessions[index].archived = false }
                     changed = true
                 }
             } else {

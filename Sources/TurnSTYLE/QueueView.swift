@@ -581,11 +581,14 @@ private final class SessionColumns: ObservableObject {
     func displayWidth(_ column: SessionColumn, available: CGFloat) -> CGFloat {
         width(column) * max(1, available / total)
     }
-    func width(_ column: SessionColumn) -> CGFloat { widths[SessionColumn.allCases.firstIndex(of: column)!] }
+    func width(_ column: SessionColumn) -> CGFloat {
+        let savedWidth = widths[SessionColumn.allCases.firstIndex(of: column)!]
+        return column == .actions ? max(122, savedWidth) : savedWidth
+    }
     var total: CGFloat { order.reduce(0) { $0 + width($1) } }
     func resize(_ column: SessionColumn, to width: CGFloat) {
         let index = SessionColumn.allCases.firstIndex(of: column)!
-        widths[index] = min(1400, max(column == .actions ? 106 : column == .session ? 180 : 65, width))
+        widths[index] = min(1400, max(column == .actions ? 122 : column == .session ? 180 : 65, width))
         UserDefaults.standard.set(widths, forKey: "turnstyle.columnWidths")
     }
 }
@@ -794,6 +797,9 @@ private struct SessionRow: View {
                 : snoozed ? "moon" : session.addressed == true ? "checkmark.circle" : session.status.symbol
     }
     private var summary: String {
+        if session.archiveUntilRestored == true {
+            return "Restoring this chat also allows future chats with this title in the same workspace and device."
+        }
         if session.done { return "Marked done in TurnSTYLE. The conversation remains in \(session.appName)." }
         if snoozed && session.snoozedIndefinitely == true {
             return "Snoozed indefinitely. Restore here or send a new prompt in the original app to bring it back."
@@ -950,6 +956,15 @@ private struct SessionRow: View {
                     }
                     .modifier(ActionHover(tooltip: "Copy session ID")).accessibilityLabel(
                         "Copy session ID for \(session.title)")
+                    if session.archiveUntilRestored != true {
+                        Button {
+                            model.archiveUntilRestored(session.id)
+                        } label: {
+                            Image(systemName: "archivebox.fill").frame(width: 20, height: 22)
+                        }
+                        .modifier(ActionHover(tooltip: "Archive this title and future matching chats"))
+                        .accessibilityLabel("Archive \(session.title) until restored")
+                    }
                 }.buttonStyle(.plain).foregroundStyle(sourceInk)
             }
         }
